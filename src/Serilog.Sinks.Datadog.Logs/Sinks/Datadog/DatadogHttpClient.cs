@@ -115,6 +115,8 @@ namespace Serilog.Sinks.Datadog.Logs
         {
             var payload = logEventChunk.Payload;
             var content = new StringContent(payload, Encoding.UTF8, _content);
+            var responses = new List<HttpResponseMessage>();
+
             for (int retry = 0; retry < MaxRetries; retry++)
             {
                 int backoff = (int)Math.Min(Math.Pow(2, retry), MaxBackoff);
@@ -127,7 +129,10 @@ namespace Serilog.Sinks.Datadog.Logs
                 {
                     var result = await _client.PostAsync(_url, content);
                     if (result == null) { continue; }
-                    if ((int)result.StatusCode >= 500) { continue; }
+
+                    responses.Add(result);
+
+                    if ((int) result.StatusCode >= 500) { continue; }
                     if ((int)result.StatusCode >= 400) { break; }
                     if (result.IsSuccessStatusCode) { return; }
                 }
@@ -137,7 +142,7 @@ namespace Serilog.Sinks.Datadog.Logs
                 }
             }
 
-            throw new CannotSendLogEventException(payload, logEventChunk.LogEvents);
+            throw new CannotSendLogEventException(payload, logEventChunk.LogEvents, responses);
         }
 
         void IDatadogClient.Close() { }
